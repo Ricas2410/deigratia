@@ -57,6 +57,9 @@ urlpatterns = [
     # TinyMCE
     path('tinymce/', include('tinymce.urls')),
 
+    # Storage Management (Admin only)
+    path('admin/', include('shared_utils.urls')),
+
     # SEO URLs
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('robots.txt', robots_txt, name='robots_txt'),

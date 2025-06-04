@@ -194,15 +194,20 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-# Media files configuration - Backblaze B2
-DEFAULT_FILE_STORAGE = 'shared_utils.storage_backends.B2MediaStorage'
-MEDIA_URL = f'https://f000.backblazeb2.com/file/{B2_BUCKET_NAME}/'
+# Media files configuration - Dynamic Storage System
+# Default to local storage for reliability, with admin option to switch to cloud
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-# Local media fallback for development
-if DEBUG:
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+# Dynamic storage backend (can be switched via admin)
+USE_DYNAMIC_STORAGE = os.getenv('USE_DYNAMIC_STORAGE', 'False').lower() == 'true'
+if USE_DYNAMIC_STORAGE:
+    DEFAULT_FILE_STORAGE = 'shared_utils.storage_manager.DynamicStorage'
+
+# Cloud storage configuration (used when dynamic storage is enabled)
+# These can be overridden by StorageSettings model in admin
+CLOUD_STORAGE_TYPE = os.getenv('CLOUD_STORAGE_TYPE', 'backblaze_b2')  # or 'aws_s3'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
