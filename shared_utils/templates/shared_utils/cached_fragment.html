@@ -1,0 +1,5 @@
+{% load cache %}
+{% cache timeout cache_key %}
+    <!-- Cached fragment: {{ fragment_name }} -->
+    {{ content|default:"" }}
+{% endcache %}
