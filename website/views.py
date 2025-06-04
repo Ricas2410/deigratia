@@ -2,10 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import ListView, DetailView
 from django.contrib import messages
 from django.utils import timezone
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import models
+from django.views.decorators.cache import cache_page
+from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
+from PIL import Image
+import io
 from .models import (
     HeroSlide,
     Announcement,
@@ -759,3 +763,115 @@ def get_page_faqs(request):
         ]
     }
     return JsonResponse(data)
+
+
+@cache_page(60 * 60 * 24)  # Cache for 24 hours
+def favicon_view(request):
+    """
+    Serve the school logo as favicon.
+    Returns the uploaded school logo resized to favicon dimensions.
+    Falls back to a default favicon if no logo is uploaded.
+    Supports different sizes via 'size' parameter.
+    """
+    # Get requested size (default to 32x32)
+    try:
+        size = int(request.GET.get('size', 32))
+        # Limit size to reasonable values
+        size = max(16, min(512, size))
+    except (ValueError, TypeError):
+        size = 32
+
+    try:
+        site_settings = SiteSettings.objects.first()
+
+        if site_settings and site_settings.school_logo:
+            # Open the uploaded logo
+            logo_file = site_settings.school_logo
+
+            # Open image with PIL
+            with Image.open(logo_file.path) as img:
+                # Convert to RGBA if not already
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+
+                # Resize to requested size
+                img = img.resize((size, size), Image.Resampling.LANCZOS)
+
+                # Save to bytes buffer
+                buffer = io.BytesIO()
+
+                # Use ICO format for .ico requests, PNG otherwise
+                if request.path.endswith('.ico'):
+                    img.save(buffer, format='ICO')
+                    content_type = 'image/x-icon'
+                else:
+                    img.save(buffer, format='PNG')
+                    content_type = 'image/png'
+
+                buffer.seek(0)
+
+                # Return as HTTP response
+                response = HttpResponse(buffer.getvalue(), content_type=content_type)
+                response['Cache-Control'] = 'public, max-age=86400'  # Cache for 1 day
+                return response
+
+    except Exception as e:
+        # Log the error for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error generating favicon: {str(e)}")
+
+    # Fallback: return a simple default favicon
+    # Create a simple colored square as fallback
+    try:
+        # Create a simple colored square with requested size
+        img = Image.new('RGBA', (size, size), (10, 35, 81, 255))  # School primary color
+
+        # Add a simple "D" letter in white
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+
+        # Calculate font size based on image size
+        font_size = int(size * 0.6)
+
+        # Try to use a simple font, fallback to default
+        try:
+            font = ImageFont.load_default()
+        except:
+            font = None
+
+        # Calculate text position to center it
+        if font:
+            bbox = draw.textbbox((0, 0), "D", font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        else:
+            text_width = font_size * 0.6
+            text_height = font_size
+
+        x = (size - text_width) // 2
+        y = (size - text_height) // 2
+
+        # Draw "D" for Deigratia
+        draw.text((x, y), "D", fill=(255, 255, 255, 255), font=font)
+
+        # Save to buffer
+        buffer = io.BytesIO()
+
+        # Use ICO format for .ico requests, PNG otherwise
+        if request.path.endswith('.ico'):
+            img.save(buffer, format='ICO')
+            content_type = 'image/x-icon'
+        else:
+            img.save(buffer, format='PNG')
+            content_type = 'image/png'
+
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type=content_type)
+        response['Cache-Control'] = 'public, max-age=86400'
+        return response
+
+    except Exception as e:
+        # Ultimate fallback: return empty response
+        return HttpResponse(status=404)

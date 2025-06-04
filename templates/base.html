@@ -1,4 +1,4 @@
-{% load seo_tags cache_tags %}
+{% load seo_tags cache_tags favicon_tags %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -10,6 +10,9 @@
       {% structured_data_organization %}
       {% structured_data_website %}
     {% endblock %}
+
+    <!-- Favicon -->
+    {% favicon_links %}
 
      <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>

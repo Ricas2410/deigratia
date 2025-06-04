@@ -41,4 +41,7 @@ urlpatterns = [
     # Admin-specific AJAX endpoints
     path('admin/website/get-page-content/', views.get_page_content, name='get-page-content'),
     path('admin/website/get-page-faqs/', views.get_page_faqs, name='get-page-faqs'),
+
+    # Favicon
+    path('favicon.ico', views.favicon_view, name='favicon'),
 ]
