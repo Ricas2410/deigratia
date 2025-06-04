@@ -59,17 +59,27 @@ INSTALLED_APPS = [
     'appointments',  # Appointment booking system
 ]
 
+# Middleware configuration - conditional cache middleware
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.middleware.cache.UpdateCacheMiddleware',  # Cache middleware (first)
+]
+
+# Add cache middleware only in production with Redis
+if not DEBUG and os.getenv('REDIS_URL'):
+    MIDDLEWARE.append('django.middleware.cache.UpdateCacheMiddleware')
+
+MIDDLEWARE.extend([
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django.middleware.cache.FetchFromCacheMiddleware',  # Cache middleware (last)
-]
+])
+
+# Add cache middleware only in production with Redis
+if not DEBUG and os.getenv('REDIS_URL'):
+    MIDDLEWARE.append('django.middleware.cache.FetchFromCacheMiddleware')
 
 ROOT_URLCONF = 'ricas_school_manager.urls'
 
@@ -279,27 +289,41 @@ RUN_SCHEDULER_IN_DEBUG = True  # Set to False to disable scheduler in debug mode
 # CACHING CONFIGURATION
 # =============================================================================
 
-# Cache configuration - Redis for production, Database for development
-if DEBUG and not os.getenv('REDIS_URL'):
-    # Development: Use database cache when Redis is not available
+# Cache configuration - Local memory cache for development
+if DEBUG:
+    # Development: Use local memory cache (fast and no external dependencies)
     CACHES = {
         'default': {
-            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-            'LOCATION': 'cache_table',
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'default-cache',
             'TIMEOUT': 300,
             'OPTIONS': {
                 'MAX_ENTRIES': 1000,
             }
         },
         'sessions': {
-            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-            'LOCATION': 'cache_table',
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'sessions-cache',
             'TIMEOUT': 86400,
+            'OPTIONS': {
+                'MAX_ENTRIES': 500,
+            }
         },
         'templates': {
-            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-            'LOCATION': 'cache_table',
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'templates-cache',
             'TIMEOUT': 3600,
+            'OPTIONS': {
+                'MAX_ENTRIES': 300,
+            }
+        },
+        'template_fragments': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'fragments-cache',
+            'TIMEOUT': 3600,
+            'OPTIONS': {
+                'MAX_ENTRIES': 300,
+            }
         }
     }
 else:
@@ -346,6 +370,19 @@ else:
             },
             'TIMEOUT': 3600,  # 1 hour for templates
             'KEY_PREFIX': 'ricas_templates',
+        },
+        'template_fragments': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_TEMPLATES_URL', 'redis://127.0.0.1:6379/3'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 30,
+                    'retry_on_timeout': True,
+                },
+            },
+            'TIMEOUT': 3600,  # 1 hour for template fragments
+            'KEY_PREFIX': 'ricas_fragments',
         }
     }
 
@@ -353,9 +390,15 @@ else:
 CACHE_MIDDLEWARE_KEY_PREFIX = 'ricas_school'
 CACHE_MIDDLEWARE_SECONDS = 600  # 10 minutes for page cache
 
-# Session cache - Redis for high performance
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'sessions'
+# Session configuration - Always use database sessions for development
+if DEBUG:
+    # Development: Use database sessions (reliable and simple)
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+else:
+    # Production: Use cache sessions with Redis
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'sessions'
+
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_SAVE_EVERY_REQUEST = False  # Only save when modified
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
