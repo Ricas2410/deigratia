@@ -109,37 +109,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'ricas_school_manager.wsgi.application'
 
 
-# Database - Using environment variables with SQLite/PostgreSQL support
-DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3')
-
-if DB_ENGINE == 'django.db.backends.sqlite3':
-    # SQLite configuration (development)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / os.getenv('DB_NAME', 'db.sqlite3'),
-        }
+# Database - PostgreSQL for both development and production
+DATABASES = {
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'neondb'),
+        'USER': os.getenv('DB_USER', 'neondb_owner'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'your-db-password'),
+        'HOST': os.getenv('DB_HOST', 'your-db-host'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+        'OPTIONS': {
+            'sslmode': 'require',
+            'connect_timeout': 10,
+        },
+        # Optimized for Neon PostgreSQL
+        'CONN_MAX_AGE': 60 if DEBUG else 300,  # Shorter for dev, longer for prod
+        'CONN_HEALTH_CHECKS': True,
     }
-else:
-    # PostgreSQL configuration (production)
-    DATABASES = {
-        'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-            'NAME': os.getenv('DB_NAME', 'defaultdb'),
-            'USER': os.getenv('DB_USER', 'your-db-user'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'your-db-password'),
-            'HOST': os.getenv('DB_HOST', 'your-db-host'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-            'OPTIONS': {
-                'sslmode': 'require',
-                # Optimize for limited connections
-                'connect_timeout': 10,
-            },
-            # Reduced connection pooling for cloud databases with limited connections
-            'CONN_MAX_AGE': 0,  # Disable connection pooling to avoid connection limit issues
-            'CONN_HEALTH_CHECKS': True,
-        }
-    }
+}
 
 # Backup SQLite database for development/testing
 DATABASES_BACKUP = {
