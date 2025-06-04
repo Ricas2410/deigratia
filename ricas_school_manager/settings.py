@@ -102,20 +102,14 @@ WSGI_APPLICATION = 'ricas_school_manager.wsgi.application'
 # Database - Using environment variables
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
-        'NAME': os.getenv('DB_NAME', 'test'),
-        'USER': os.getenv('DB_USER', '8yAv64zJkqvMmPm.root'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'JBiAxnIzpPjj094r'),
-        'HOST': os.getenv('DB_HOST', 'gateway01.eu-central-1.prod.aws.tidbcloud.com'),
-        'PORT': os.getenv('DB_PORT', '4000'),
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'defaultdb'),
+        'USER': os.getenv('DB_USER', 'your-db-user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'your-db-password'),
+        'HOST': os.getenv('DB_HOST', 'your-db-host'),
+        'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'autocommit': True,
-            'ssl': {
-                'ssl_disabled': False,
-            },
-            'ssl_mode': 'REQUIRED',
+            'sslmode': 'require',
         },
         'CONN_MAX_AGE': 600,  # Connection pooling for performance
         'CONN_HEALTH_CHECKS': True,
@@ -160,10 +154,10 @@ USE_TZ = True
 # =============================================================================
 
 # Backblaze B2 Configuration - Using environment variables
-B2_APPLICATION_KEY_ID = os.getenv('B2_APPLICATION_KEY_ID', '05c3fdb889e3')
-B2_APPLICATION_KEY = os.getenv('B2_APPLICATION_KEY', '005d9356855b1722ad320013f088234798ebf9dc68')
-B2_BUCKET_NAME = os.getenv('B2_BUCKET_NAME', 'ricas-school-media')
-B2_STATIC_BUCKET_NAME = os.getenv('B2_STATIC_BUCKET_NAME', 'ricas-school-static')
+B2_APPLICATION_KEY_ID = os.getenv('B2_APPLICATION_KEY_ID', 'your-b2-key-id')
+B2_APPLICATION_KEY = os.getenv('B2_APPLICATION_KEY', 'your-b2-application-key')
+B2_BUCKET_NAME = os.getenv('B2_BUCKET_NAME', 'your-media-bucket')
+B2_STATIC_BUCKET_NAME = os.getenv('B2_STATIC_BUCKET_NAME', 'your-static-bucket')
 B2_REGION = os.getenv('B2_REGION', 'us-west-000')
 B2_ENDPOINT_URL = os.getenv('B2_ENDPOINT_URL', 'https://s3.us-west-000.backblazeb2.com')
 
@@ -285,59 +279,75 @@ RUN_SCHEDULER_IN_DEBUG = True  # Set to False to disable scheduler in debug mode
 # CACHING CONFIGURATION
 # =============================================================================
 
-# Cache configuration - Redis for production (2000 concurrent users)
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 100,  # High connection pool for concurrent users
-                'retry_on_timeout': True,
-            },
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-            'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+# Cache configuration - Redis for production, Database for development
+if DEBUG and not os.getenv('REDIS_URL'):
+    # Development: Use database cache when Redis is not available
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'cache_table',
+            'TIMEOUT': 300,
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            }
         },
-        'TIMEOUT': 300,  # 5 minutes default
-        'KEY_PREFIX': 'ricas_school',
-        'VERSION': 1,
-    },
-    'sessions': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_SESSIONS_URL', 'redis://127.0.0.1:6379/2'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 50,
-                'retry_on_timeout': True,
-            },
+        'sessions': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'cache_table',
+            'TIMEOUT': 86400,
         },
-        'TIMEOUT': 86400,  # 24 hours for sessions
-        'KEY_PREFIX': 'ricas_sessions',
-    },
-    'templates': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_TEMPLATES_URL', 'redis://127.0.0.1:6379/3'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 30,
-                'retry_on_timeout': True,
-            },
-        },
-        'TIMEOUT': 3600,  # 1 hour for templates
-        'KEY_PREFIX': 'ricas_templates',
-    },
-    'database_cache': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'cache_table',
-        'TIMEOUT': 300,
-        'OPTIONS': {
-            'MAX_ENTRIES': 10000,  # Increased for high traffic
+        'templates': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'cache_table',
+            'TIMEOUT': 3600,
         }
     }
-}
+else:
+    # Production: Use Redis cache
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 100,  # High connection pool for concurrent users
+                    'retry_on_timeout': True,
+                },
+                'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+                'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+            },
+            'TIMEOUT': 300,  # 5 minutes default
+            'KEY_PREFIX': 'ricas_school',
+            'VERSION': 1,
+        },
+        'sessions': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_SESSIONS_URL', 'redis://127.0.0.1:6379/2'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 50,
+                    'retry_on_timeout': True,
+                },
+            },
+            'TIMEOUT': 86400,  # 24 hours for sessions
+            'KEY_PREFIX': 'ricas_sessions',
+        },
+        'templates': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_TEMPLATES_URL', 'redis://127.0.0.1:6379/3'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 30,
+                    'retry_on_timeout': True,
+                },
+            },
+            'TIMEOUT': 3600,  # 1 hour for templates
+            'KEY_PREFIX': 'ricas_templates',
+        }
+    }
 
 # Cache key prefix to avoid conflicts
 CACHE_MIDDLEWARE_KEY_PREFIX = 'ricas_school'
